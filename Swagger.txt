@@ -1,0 +1,196 @@
+// ================================
+// Transaction.java
+// ================================
+
+package com.example.rewards.model;
+
+import java.time.LocalDate;
+import org.antlr.v4.runtime.misc.NotNull;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Positive;
+import com.fasterxml.jackson.annotation.JsonFormat;
+
+/**
+ * Entity representing a purchase transaction made by a customer.
+ */
+@Entity
+@Table(name = "transactions")
+public class Transaction {
+	
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+	@SuppressWarnings("deprecation")
+	@NotNull
+	private Long customerId;
+	@Positive
+	private Double amount;
+	@PastOrPresent
+	@JsonFormat(pattern = "yyyy-MM-dd")
+	private LocalDate date;
+	
+	public Transaction() {
+	}
+
+	public Transaction(Long id, Long customerId, Double amount, LocalDate date) {
+		this.id = id;
+		this.customerId = customerId;
+		this.amount = amount;
+		this.date = date;
+	}
+	
+	public Long getId() {
+		return id;
+	}
+	public void setId(Long id) {
+		this.id = id;
+	}
+	public Long getCustomerId() {
+		return customerId;
+	}
+	public void setCustomerId(Long customerId) {
+		this.customerId = customerId;
+	}
+	public Double getAmount() {
+		return amount;
+	}
+	public void setAmount(Double amount) {
+		this.amount = amount;
+	}
+	public LocalDate getDate() {
+		return date;
+	}
+	public void setDate(LocalDate date) {
+		this.date = date;
+	}
+	
+
+}
+
+// ================================
+// RewardResponse.java
+// ================================
+package com.example.rewards.dto;
+
+import java.util.Map;
+
+/**
+ * DTO representing reward points summary per customer.
+ */
+public class RewardResponse {
+	
+	private Long customerId;
+	private Map<String, Integer> monthlyPoints;
+	private Integer totalPoints;
+	
+	public RewardResponse(Long customerId, Map<String, Integer> monthlyPoints, Integer totalPoints) {
+		this.customerId = customerId;
+		this.monthlyPoints = monthlyPoints;
+		this.totalPoints = totalPoints;
+	}
+
+	public Long getCustomerId() {
+		return customerId;
+	}
+
+	public Map<String, Integer> getMonthlyPoints() {
+		return monthlyPoints;
+	}
+
+	public Integer getTotalPoints() {
+		return totalPoints;
+	}
+
+}
+
+// ================================
+// RewardController.java
+// ================================
+package com.example.rewards.controller;
+
+import com.example.rewards.dto.RewardResponse;
+import com.example.rewards.model.Transaction;
+import com.example.rewards.repository.TransactionRepository;
+import com.example.rewards.service.RewardService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * REST controller for handling reward-related endpoints.
+ * 
+ * Base URL: http://localhost:8080/api
+ */
+@RestController
+@RequestMapping("/api")
+public class RewardController {
+
+    @Autowired
+    private RewardService rewardService;
+
+    @Autowired
+    private TransactionRepository transactionRepository;
+    
+    /**
+     * Endpoint to add a new transaction.
+     * URL: POST http://localhost:8080/api/transactions 
+     * @param transaction Transaction data
+     * @return Saved Transaction
+     */
+
+    @PostMapping("/transactions")
+    public Transaction addTransaction(@RequestBody Transaction transaction) {
+        return transactionRepository.save(transaction);
+    }
+    
+    /**
+     * Endpoint to fetch rewards for a specific customer by ID.
+     * URL: GET http://localhost:8080/api/rewards/{customerId} 
+     * @param customerId ID of the customer
+     * @return RewardResponse containing reward points
+     */
+
+    @GetMapping("/rewards/{customerId}")
+    public RewardResponse getRewards(@PathVariable Long customerId) {
+        return rewardService.calculateRewards(customerId);
+    }
+    
+    /**
+     * Endpoint to fetch all transactions.
+     * URL: GET http://localhost:8080/api/transactions 
+     * @return List of all transactions
+     */
+
+    @GetMapping("/transactions")
+    public List<Transaction> getAllTransactions() {
+        return transactionRepository.findAll();
+    }
+}
+
+// ================================
+// SwaggerConfig.java
+// ================================
+package com.example.rewards.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Configuration class for Swagger API documentation.
+ */
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI apiInfo() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Customer Rewards API")
+                        .description("API to manage customer transactions and reward points")
+                        .version("1.0"));
+    }
+}
