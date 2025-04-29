@@ -1,0 +1,614 @@
+Homework Requirements For Web API Developer :
+A retailer offers a rewards program to its customers, awarding points based on each recorded purchase.  
+  
+A customer receives 2 points for every dollar spent over $100 in each transaction, plus 1 point for every dollar spent between $50 and $100 in each transaction. 
+(e.g. a $120 purchase = 2x$20 + 1x$50 = 90 points). 
+  
+Given a record of every transaction during a three month period, calculate the reward points earned for each customer per month and total. 
+  
+•             Solve using Spring Boot 
+•             Create a RESTful endpoint 
+•             Make up a data set to best demonstrate your solution 
+•             Check solution into GitHub 
+Key points you need to take care before submitting:
+1.	Do not hard code the months.
+2.	Unit and integration tests present in code with more test data(for multiple customers with multiple transactions).
+3.	Exception and negative test scenarios needs to be included.
+4.	Add readme file explaining the project and it’s  structure and more details about the implementation.
+5.	Do not check in target/bin folder.
+6.	Do not upload the zip version.
+7.	Add java docs at class and method levels that should explain the purpose.
+8.	Format the code.
+9.	Follow java coding standards(project structure, valid package names, also Class, method and variable names etc”;).
+
+this is my requirement to make i make a springboot rest api below
+
+// ================================
+// RewardsApplication.java
+// ================================
+
+package com.example.rewards;
+
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+/**
+ * Entry point of the Rewards Spring Boot application.
+ * This application calculates customer reward points based on transactions.
+ */
+@SpringBootApplication
+public class CustomerRewardsApiApplication {
+	
+	private static final Logger logger = LoggerFactory.getLogger(CustomerRewardsApiApplication.class);
+
+	public static void main(String[] args) {
+		logger.debug("Starting Customer Rewards API application...");
+		SpringApplication.run(CustomerRewardsApiApplication.class, args);
+		logger.debug("Application started successfully on http://localhost:8080");
+	}
+
+}
+
+
+// ================================
+// SwaggerConfig.java
+// ================================
+package com.example.rewards.config;
+
+import io.swagger.v3.oas.models.OpenAPI;
+import io.swagger.v3.oas.models.info.Info;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+/**
+ * Configuration class for Swagger API documentation.
+ */
+@Configuration
+public class SwaggerConfig {
+
+    @Bean
+    public OpenAPI apiInfo() {
+        return new OpenAPI()
+                .info(new Info()
+                        .title("Customer Rewards API")
+                        .description("API to manage customer transactions and reward points")
+                        .version("1.0"));
+    }
+}
+
+// ================================
+// RewardController.java
+// ================================
+package com.example.rewards.controller;
+
+import com.example.rewards.dto.RewardResponse;
+import com.example.rewards.model.Transaction;
+import com.example.rewards.repository.TransactionRepository;
+import com.example.rewards.service.RewardService;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+/**
+ * REST controller for handling reward-related endpoints.
+ * 
+ * Base URL: http://localhost:8080/api
+ */
+@RestController
+@RequestMapping("/api")
+public class RewardController {
+
+    @Autowired
+    private RewardService rewardService;
+
+    @Autowired
+    private TransactionRepository transactionRepository;
+    
+    /**
+     * Endpoint to add a new transaction.
+     * URL: POST http://localhost:8080/api/transactions 
+     * @param transaction Transaction data
+     * @return Saved Transaction
+     */
+
+    @PostMapping("/transactions")
+    public Transaction addTransaction(@RequestBody Transaction transaction) {
+        return transactionRepository.save(transaction);
+    }
+    
+    /**
+     * Endpoint to fetch rewards for a specific customer by ID.
+     * URL: GET http://localhost:8080/api/rewards/{customerId} 
+     * @param customerId ID of the customer
+     * @return RewardResponse containing reward points
+     */
+
+    @GetMapping("/rewards/{customerId}")
+    public RewardResponse getRewards(@PathVariable Long customerId) {
+        return rewardService.calculateRewards(customerId);
+    }
+    
+    /**
+     * Endpoint to fetch all transactions.
+     * URL: GET http://localhost:8080/api/transactions 
+     * @return List of all transactions
+     */
+
+    @GetMapping("/transactions")
+    public List<Transaction> getAllTransactions() {
+        return transactionRepository.findAll();
+    }
+}
+
+// ================================
+// RewardResponse.java
+// ================================
+package com.example.rewards.dto;
+
+import java.util.Map;
+
+/**
+ * DTO representing reward points summary per customer.
+ */
+public class RewardResponse {
+	
+	private Long customerId;
+	private Map<String, Integer> monthlyPoints;
+	private Integer totalPoints;
+	
+	public RewardResponse(Long customerId, Map<String, Integer> monthlyPoints, Integer totalPoints) {
+		this.customerId = customerId;
+		this.monthlyPoints = monthlyPoints;
+		this.totalPoints = totalPoints;
+	}
+
+	public Long getCustomerId() {
+		return customerId;
+	}
+
+	public Map<String, Integer> getMonthlyPoints() {
+		return monthlyPoints;
+	}
+
+	public Integer getTotalPoints() {
+		return totalPoints;
+	}
+
+}
+
+// ================================
+// CustomerNotFoundException.java
+// ================================
+package com.example.rewards.exception;
+
+/**
+ * Exception thrown when customer ID is not found in database.
+ */
+public class CustomerNotFoundException extends RuntimeException {
+    public CustomerNotFoundException(String message) {
+        super(message);
+    }
+}
+
+// ================================
+// GlobalExceptionHandler.java
+// ================================
+package com.example.rewards.exception;
+
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+/**
+ * Global exception handler for the Rewards API.
+ */
+@ControllerAdvice
+public class GlobalExceptionHandler {
+
+    @ExceptionHandler(CustomerNotFoundException.class)
+    public ResponseEntity<String> handleCustomerNotFound(CustomerNotFoundException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.NOT_FOUND);
+    }
+
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<String> handleGenericException(Exception ex) {
+        return new ResponseEntity<>("An unexpected error occurred: " + ex.getMessage(), HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+}
+
+// ================================
+// Transaction.java
+// ================================
+
+package com.example.rewards.model;
+
+import java.time.LocalDate;
+import org.antlr.v4.runtime.misc.NotNull;
+import jakarta.persistence.*;
+import jakarta.validation.constraints.PastOrPresent;
+import jakarta.validation.constraints.Positive;
+
+/**
+ * Entity representing a purchase transaction made by a customer.
+ */
+@Entity
+@Table(name = "transactions")
+public class Transaction {
+	
+	@Id
+	@GeneratedValue(strategy = GenerationType.IDENTITY)
+	private Long id;
+	@SuppressWarnings("deprecation")
+	@NotNull
+	private Long customerId;
+	@Positive
+	private Double amount;
+	@PastOrPresent
+	private LocalDate date;
+	
+	public Transaction() {
+	}
+
+	public Transaction(Long id, Long customerId, Double amount, LocalDate date) {
+		this.id = id;
+		this.customerId = customerId;
+		this.amount = amount;
+		this.date = date;
+	}
+	
+	public Long getId() {
+		return id;
+	}
+	public void setId(Long id) {
+		this.id = id;
+	}
+	public Long getCustomerId() {
+		return customerId;
+	}
+	public void setCustomerId(Long customerId) {
+		this.customerId = customerId;
+	}
+	public Double getAmount() {
+		return amount;
+	}
+	public void setAmount(Double amount) {
+		this.amount = amount;
+	}
+	public LocalDate getDate() {
+		return date;
+	}
+	public void setDate(LocalDate date) {
+		this.date = date;
+	}
+	
+
+}
+
+// ================================
+// TransactionRepository.java
+// ================================
+
+package com.example.rewards.repository;
+
+import java.util.List;
+import org.springframework.data.jpa.repository.JpaRepository;
+import com.example.rewards.model.Transaction;
+
+/**
+ * Repository interface for accessing transaction data.
+ */
+public interface TransactionRepository extends JpaRepository<Transaction, Long>{
+	List<Transaction> findByCustomerId(Long customerId);
+
+}
+
+// ================================
+// RewardService.java (Interface)
+// ================================
+
+package com.example.rewards.service;
+
+import com.example.rewards.dto.RewardResponse;
+
+/**
+ * Interface for reward point calculation service.
+ */
+public interface RewardService {
+	
+	RewardResponse calculateRewards(Long customerId);
+	RewardResponse fallbackReward(Long customerId, Throwable t);
+
+}
+
+// ================================
+// RewardServiceImpl.java (Implementation)
+// ================================
+
+package com.example.rewards.service;
+
+import java.time.format.DateTimeFormatter;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import com.example.rewards.dto.RewardResponse;
+import com.example.rewards.exception.CustomerNotFoundException;
+import com.example.rewards.model.Transaction;
+import com.example.rewards.repository.TransactionRepository;
+
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+
+/**
+ * Implementation of the RewardService interface.
+ */
+@Service
+public class RewardServiceImpl implements RewardService{
+	
+	private static final Logger logger = LoggerFactory.getLogger(RewardServiceImpl.class);
+
+	
+	@Autowired
+	private TransactionRepository repository;
+	
+	 /**
+     * Calculates reward points for a specific customer.
+     * @param customerId the customer's ID
+     * @return RewardResponse containing monthly and total points
+     */
+	@Override
+	@CircuitBreaker(name = "rewardService", fallbackMethod = "fallbackReward")
+	public RewardResponse calculateRewards(Long customerId) {
+		 logger.info("Calculating rewards for customerId: {}", customerId);
+		if (customerId == null) {
+			logger.error("Customer ID is null");
+            throw new IllegalArgumentException("Customer ID must not be null");
+        }
+		List<Transaction> transactions = repository.findByCustomerId(customerId);
+        if (transactions.isEmpty()) {
+        	logger.warn("No transactions found for customerId: {}", customerId);
+            throw new CustomerNotFoundException("Customer with ID " + customerId + " not found");
+        }
+        Map<String, Integer> monthlyPoints = new HashMap<>();
+        int total = 0;
+        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("yyyy-MM");
+
+        for (Transaction t : transactions) {
+            int points = calculatePoints(t.getAmount());
+            String month = t.getDate().format(formatter);
+            monthlyPoints.put(month, monthlyPoints.getOrDefault(month, 0) + points);
+            total += points;
+        }
+        return new RewardResponse(customerId, monthlyPoints, total);
+	}
+	
+	private int calculatePoints(Double amount) {
+        int points = 0;
+        if (amount > 100) {
+            points += (int)(amount - 100) * 2 + 50;
+        } else if (amount > 50) {
+            points += (int)(amount - 50);
+        }
+        return points;
+    }
+
+	 /**
+     * Fallback method in case reward calculation fails.
+     */
+	@Override
+	public RewardResponse fallbackReward(Long customerId, Throwable t) {
+		return new RewardResponse(customerId, Collections.emptyMap(), 0);
+	}
+
+}
+
+package com.example.rewards;
+
+import org.junit.jupiter.api.Test;
+import org.springframework.boot.test.context.SpringBootTest;
+
+@SpringBootTest
+class CustomerRewardsApiApplicationTests {
+
+	@Test
+	void contextLoads() {
+	}
+
+}
+
+// ================================
+// RewardControllerTests.java
+// ================================
+package com.example.rewards;
+ 
+import com.example.rewards.controller.RewardController;
+import com.example.rewards.dto.RewardResponse;
+import com.example.rewards.exception.CustomerNotFoundException;
+import com.example.rewards.service.RewardService;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import static org.mockito.BDDMockito.given;
+ 
+import java.util.HashMap;
+import java.util.Map;
+ 
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+ 
+/**
+* Unit tests for RewardController.
+*/
+@ExtendWith(MockitoExtension.class)
+public class RewardControllerTest {
+ 
+    private MockMvc mockMvc;
+ 
+    @Mock
+    private RewardService rewardService; // Mocking RewardService dependency
+ 
+    @InjectMocks
+    private RewardController rewardController; // Injecting mocked service into controller
+ 
+    @BeforeEach
+    public void setup() {
+        // Initialize MockMvc with the controller
+        mockMvc = MockMvcBuilders.standaloneSetup(rewardController).build();
+    }
+ 
+    /**
+     * Positive Test Case:
+     * Test that reward points are fetched successfully for a valid customer.
+     * - Mocks RewardService to return a predefined RewardResponse.
+     * - Verifies that the response is HTTP 200 OK.
+     * - Verifies the correct JSON structure and values.
+     */
+    @Test
+    @DisplayName("✅ Should return reward points successfully for valid customerId")
+    public void testGetRewardPoints_Success() throws Exception {
+        // Prepare mock reward points data
+        Map<String, Integer> monthlyPoints = new HashMap<>();
+        monthlyPoints.put("January", 100);
+        monthlyPoints.put("February", 200);
+ 
+        // Mocked response from service
+        RewardResponse rewardResponse = new RewardResponse(1L, monthlyPoints, 300);
+ 
+        // Mock the service behavior
+        when(rewardService.calculateRewards(anyLong())).thenReturn(rewardResponse);
+ 
+        // Perform GET request and validate response
+        mockMvc.perform(get("/rewards/{customerId}", 1L))
+               .andExpect(status().isOk()) // HTTP 200
+               .andExpect(jsonPath("$.customerId").value(1L)) // Validate customerId
+               .andExpect(jsonPath("$.monthlyPoints.January").value(100)) // Validate January points
+               .andExpect(jsonPath("$.monthlyPoints.February").value(200)) // Validate February points
+               .andExpect(jsonPath("$.totalPoints").value(300)); // Validate total points
+    }
+ 
+    /**
+     * Negative Test Case:
+     * Test that an error is returned when customer is not found.
+     * - Mocks RewardService to throw RuntimeException.
+     * - Verifies that the controller returns an error response (e.g., 404 Not Found).
+     */
+    
+    @Test
+    @DisplayName("❌ Should return 404 Not Found when customerId does not exist")
+    public void testGetRewardPoints_CustomerNotFound() throws Exception {
+        // Mock the service to throw a CustomerNotFoundException
+
+    	lenient().when(rewardService.calculateRewards(999L))
+        .thenThrow(new CustomerNotFoundException("Customer not found"));
+ 
+
+        // Perform GET request and validate that an error occurs
+        mockMvc.perform(get("/rewards/{customerId}", 999L))
+            .andExpect(status().isNotFound()); // Expected HTTP 404
+    }
+    
+}
+
+// ================================
+// RewardServiceTests.java
+// ================================
+package com.example.rewards;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+import java.time.LocalDate;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+
+import com.example.rewards.model.Transaction;
+import com.example.rewards.repository.TransactionRepository;
+import com.example.rewards.service.RewardService;
+
+/**
+ * Unit tests for RewardService.
+ */
+@SpringBootTest
+public class RewardServiceTests {
+
+    @Autowired
+    private TransactionRepository repository;
+
+    @Autowired
+    private RewardService service;
+
+    @BeforeEach
+    public void setup() {
+        repository.deleteAll();
+        repository.save(new Transaction(null, 1L, 120.0, LocalDate.of(2024, 1, 15)));
+        repository.save(new Transaction(null, 1L, 80.0, LocalDate.of(2024, 2, 10)));
+        repository.save(new Transaction(null, 2L, 150.0, LocalDate.of(2024, 1, 20)));
+    }
+
+    @Test
+    public void testCustomer1Rewards() {
+        assertEquals(90 + 30, service.calculateRewards(1L).getTotalPoints());
+    }
+
+    @Test
+    public void testCustomer2Rewards() {
+        assertEquals((150 - 100) * 2 + 50, service.calculateRewards(2L).getTotalPoints());
+    }
+
+    
+    @Test
+    public void testNoRewards() {
+        var response = service.calculateRewards(3L);
+        assertEquals(0, response.getTotalPoints());
+        assertTrue(response.getMonthlyPoints().isEmpty());
+    }
+
+}
+
+spring.application.name=customer-rewards-api
+server.port=8080
+spring.datasource.url=jdbc:h2:mem:rewardsdb
+spring.datasource.driverClassName=org.h2.Driver
+spring.datasource.username=sa
+spring.datasource.password=
+spring.h2.console.enabled=true
+spring.h2.console.path=/h2-console
+spring.jpa.show-sql=true
+spring.jpa.hibernate.ddl-auto=update
+spring.sql.init.mode=always
+spring.jpa.database-platform=org.hibernate.dialect.H2Dialect
+spring.sql.init.platform=h2
+
+# Swagger/OpenAPI config
+springdoc.api-docs.path=/v3/api-docs
+springdoc.swagger-ui.path=/swagger-ui.html
+springdoc.api-docs.enabled=true
+springdoc.swagger-ui.enabled=true
+
+# Optional logging for debugging
+logging.level.org.springdoc=DEBUG
+
+these are my all classes what i want i want to remove circuit breaker from my project replace with aop which fallback the reward rsponse method or prevent to failure of microservice
+and write all the possible test cases for posivitive and negative senario of all the controller and service class
+and make sure all code are remain same make only changes in service and test classes and if relevant
+
+and make a code canvas of this and highlight the changes 
